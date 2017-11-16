@@ -8,6 +8,7 @@ import argparse
 import re
 import math
 import sys
+import string
 
 __LICENSE__ = """
 Copyright (c) 2011 - 2017, Steven Tobin and Contributors.
@@ -325,6 +326,9 @@ def generate_passwords(rng, wordlist, options):
 
     return ret
 
+def transform_password(password):
+    """ tr '[sStTaAeEhHoOlLg]' '[557744%%##0011G]' """
+    return password.translate(string.maketrans("sStTaAeEhHoOlLg","557744%%##0011G"))
 
 class XkcdPassArgumentParser(argparse.ArgumentParser):
     """ Command-line argument parser for this program. """
@@ -394,7 +398,13 @@ class XkcdPassArgumentParser(argparse.ArgumentParser):
         self.add_argument(
             "--seed",
             dest="seed", default="", metavar="SEED",
-            help="Optional seed string. Will always generate same password for a given seed")    
+            help="Optional seed string. Will always generate same password for a given seed")
+        self.add_argument(
+            "--transform",
+            action="store_true", dest="transform", default=False,
+            help=(
+                "Transform the password, substituting numbers for some letters "
+                "and capitalizing some letters to satisfy corporate password policies."))
 
 
 def main(argv=None):
@@ -424,6 +434,10 @@ def main(argv=None):
 
         rng = setup_rng(options.seed)
         password = generate_passwords(rng, my_wordlist, options)
+
+        if options.transform:
+            password = transform_password(password)
+
         print password
 
     except SystemExit as exc:
