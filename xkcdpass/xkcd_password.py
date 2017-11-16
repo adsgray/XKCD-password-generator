@@ -37,19 +37,27 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
 # random.SystemRandom() should be cryptographically secure
-try:
-    rng = random.SystemRandom
-except AttributeError as ex:
-    sys.stderr.write("WARNING: System does not support cryptographically "
-                     "secure random number generator or you are using Python "
-                     "version < 2.4.\n")
-    if "XKCDPASS_ALLOW_WEAKRNG" in os.environ or \
-       "--allow-weak-rng" in sys.argv:
-        sys.stderr.write("Continuing with less-secure generator.\n")
-        rng = random.Random
-    else:
-        raise ex
+def setup_rng(seed):
 
+    # use less-secure generator with seed if it's provided
+    if seed != "":
+        rng = random.Random()
+        rng.seed(seed)
+    else:
+        try:
+            rng = random.SystemRandom()
+        except AttributeError as ex:
+            sys.stderr.write("WARNING: System does not support cryptographically "
+                             "secure random number generator or you are using Python "
+                             "version < 2.4.\n")
+            if "XKCDPASS_ALLOW_WEAKRNG" in os.environ or \
+               "--allow-weak-rng" in sys.argv:
+                sys.stderr.write("Continuing with less-secure generator.\n")
+                rng = random.Random()
+            else:
+                raise ex
+
+    return rng
 
 # Python 3 compatibility
 if sys.version_info[0] >= 3:
@@ -177,7 +185,7 @@ def verbose_reports(wordlist, options):
     print("assuming truly random word selection.\n")
 
 
-def find_acrostic(acrostic, worddict):
+def find_acrostic(rng, acrostic, worddict):
     """
     Constrain choice of words to those beginning with the letters of the
     given word (acrostic).
@@ -188,19 +196,19 @@ def find_acrostic(acrostic, worddict):
 
     for letter in acrostic:
         try:
-            words.append(rng().choice(worddict[letter]))
+            words.append(rng.choice(worddict[letter]))
         except KeyError:
             sys.stderr.write("No words found starting with " + letter + "\n")
             sys.exit(1)
     return words
 
 
-def choose_words(wordlist, numwords):
+def choose_words(rng, wordlist, numwords):
     """
     Choose numwords randomly from wordlist
     """
-
-    return [rng().choice(wordlist) for i in xrange(numwords)]
+    
+    return [rng.choice(wordlist) for i in xrange(numwords)]
 
 
 def try_input(prompt, validate):
@@ -220,7 +228,8 @@ def try_input(prompt, validate):
     return validate(answer)
 
 
-def generate_xkcdpassword(wordlist,
+def generate_xkcdpassword(rng,
+                          wordlist,
                           numwords=6,
                           interactive=False,
                           acrostic=False,
@@ -238,9 +247,9 @@ def generate_xkcdpassword(wordlist,
     # useful if driving the logic from other code
     if not interactive:
         if not acrostic:
-            passwd = delimiter.join(choose_words(wordlist, numwords))
+            passwd = delimiter.join(choose_words(rng, wordlist, numwords))
         else:
-            passwd = delimiter.join(find_acrostic(acrostic, worddict))
+            passwd = delimiter.join(find_acrostic(rng, acrostic, worddict))
 
         return passwd
 
@@ -287,11 +296,12 @@ def generate_xkcdpassword(wordlist,
     return passwd
 
 
-def emit_passwords(wordlist, options):
+def emit_passwords(rng, wordlist, options):
     """ Generate the specified number of passwords and output them. """
     count = options.count
     while count > 0:
         print(generate_xkcdpassword(
+            rng,
             wordlist,
             interactive=options.interactive,
             numwords=options.numwords,
@@ -365,6 +375,10 @@ class XkcdPassArgumentParser(argparse.ArgumentParser):
                 "Allow fallback to weak RNG if the "
                 "system does not support cryptographically secure RNG. "
                 "Only use this if you know what you are doing."))
+        self.add_argument(
+            "--seed",
+            dest="seed", default="", metavar="SEED",
+            help="Optional seed string. Will always generate same password for a given seed")    
 
 
 def main(argv=None):
@@ -382,6 +396,7 @@ def main(argv=None):
         options = parser.parse_args(argv[1:])
         validate_options(parser, options)
 
+
         my_wordlist = generate_wordlist(
             wordfile=options.wordfile,
             min_length=options.min_length,
@@ -391,7 +406,8 @@ def main(argv=None):
         if options.verbose:
             verbose_reports(my_wordlist, options)
 
-        emit_passwords(my_wordlist, options)
+        rng = setup_rng(options.seed)
+        emit_passwords(rng, my_wordlist, options)
 
     except SystemExit as exc:
         exit_status = exc.code
