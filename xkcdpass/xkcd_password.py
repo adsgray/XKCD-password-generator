@@ -309,6 +309,22 @@ def emit_passwords(rng, wordlist, options):
             delimiter=options.delimiter))
         count -= 1
 
+def generate_passwords(rng, wordlist, options):
+    """ Generate the specified number of passwords and return them. """
+    count = options.count
+    ret = ""
+    while count > 0:
+        ret += generate_xkcdpassword(
+            rng,
+            wordlist,
+            interactive=options.interactive,
+            numwords=options.numwords,
+            acrostic=options.acrostic,
+            delimiter=options.delimiter)
+        count -= 1
+
+    return ret
+
 
 class XkcdPassArgumentParser(argparse.ArgumentParser):
     """ Command-line argument parser for this program. """
@@ -407,7 +423,8 @@ def main(argv=None):
             verbose_reports(my_wordlist, options)
 
         rng = setup_rng(options.seed)
-        emit_passwords(rng, my_wordlist, options)
+        password = generate_passwords(rng, my_wordlist, options)
+        print password
 
     except SystemExit as exc:
         exit_status = exc.code
